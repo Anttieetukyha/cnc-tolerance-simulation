@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNC Tolerance Monitor — SPC Dashboard</title>
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ── Custom dark-mode industrial palette ── */
+    :root {
+      --bg-primary:   #0f1117;
+      --bg-card:      #1a1d27;
+      --bg-card-alt:  #222632;
+      --border:       #2e3345;
+      --text-primary: #e4e6ed;
+      --text-muted:   #8b8fa3;
+      --accent-green: #22c55e;
+      --accent-red:   #ef4444;
+      --accent-amber: #f59e0b;
+      --accent-blue:  #3b82f6;
+      --accent-cyan:  #06b6d4;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+
+    /* Glow ring on cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      transition: box-shadow .25s;
+    }
+    .card:hover { box-shadow: 0 0 20px rgba(59,130,246,.08); }
+
+    /* Status dot pulse */
+    @keyframes pulse-dot { 0%,100%{ opacity:1; } 50%{ opacity:.4; } }
+    .pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+    /* Button styling */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .6rem 1.25rem; border-radius: .5rem;
+      font-weight: 600; font-size: .875rem;
+      cursor: pointer; border: none;
+      transition: filter .15s, transform .1s;
+    }
+    .btn:hover { filter: brightness(1.15); }
+    .btn:active { transform: scale(.97); }
+    .btn-green  { background: var(--accent-green); color: #000; }
+    .btn-red    { background: var(--accent-red);   color: #fff; }
+    .btn-amber  { background: var(--accent-amber); color: #000; }
+    .btn-blue   { background: var(--accent-blue);  color: #fff; }
+
+    /* KPI label */
+    .kpi-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text-muted); }
+    .kpi-value { font-size: 1.65rem; font-weight: 700; line-height: 1.1; }
+
+    /* Chart wrapper */
+    #chartWrap { position: relative; width: 100%; height: 340px; }
+
+    /* Part flash animation */
+    @keyframes flash-good { 0%{ background:#16a34a33; } 100%{ background:transparent; } }
+    @keyframes flash-bad  { 0%{ background:#dc262633; } 100%{ background:transparent; } }
+    .flash-good { animation: flash-good .5s ease-out; }
+    .flash-bad  { animation: flash-bad  .5s ease-out; }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+  <!-- ═══════════════════ HEADER ═══════════════════ -->
+  <header class="flex items-center justify-between px-6 py-4 border-b" style="border-color:var(--border)">
+    <div class="flex items-center gap-3">
+      <!-- CNC icon -->
+      <svg class="w-8 h-8" style="color:var(--accent-cyan)" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.646.87a6.47 6.47 0 0 1 .775.448c.304.214.664.292 1.02.195l1.246-.374a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .896c-.009.379.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.248a1.125 1.125 0 0 1-1.369.491l-1.246-.374c-.356-.097-.716-.019-1.02.195a6.47 6.47 0 0 1-.775.448c-.333.184-.583.496-.646.87l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281a1.125 1.125 0 0 0-.645-.87 6.47 6.47 0 0 1-.776-.449c-.304-.214-.664-.292-1.02-.195l-1.246.374a1.125 1.125 0 0 1-1.37-.49l-1.296-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a7.72 7.72 0 0 1 0-.897c.008-.379-.138-.75-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.248a1.125 1.125 0 0 1 1.37-.491l1.246.374c.356.097.715.019 1.02-.195a6.47 6.47 0 0 1 .775-.448c.333-.184.583-.496.646-.87l.213-1.281Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight">CNC Tolerance Monitor</h1>
+        <p class="text-xs" style="color:var(--text-muted)">Shaft Diameter — Real-Time SPC Dashboard</p>
+      </div>
+    </div>
+    <span class="text-xs px-3 py-1 rounded-full" style="background:var(--bg-card-alt);color:var(--text-muted)">
+      Interval: 1.5 s
+    </span>
+  </header>
+
+  <!-- ═══════════════════ MAIN GRID ═══════════════════ -->
+  <main class="flex-1 p-6 grid gap-5" style="grid-template-rows: auto 1fr auto;">
+
+    <!-- Row 1 — KPI Cards -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+
+      <!-- Machine State -->
+      <div id="kpiState" class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Machine State</span>
+        <span class="flex items-center gap-2">
+          <span id="stateDot" class="inline-block w-2.5 h-2.5 rounded-full pulse-dot" style="background:var(--accent-green)"></span>
+          <span id="stateText" class="kpi-value text-green-400 text-lg">Running</span>
+        </span>
+      </div>
+
+      <!-- Total Parts -->
+      <div class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Total Parts</span>
+        <span id="totalParts" class="kpi-value">0</span>
+      </div>
+
+      <!-- Good Parts -->
+      <div class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Good Parts</span>
+        <span id="goodParts" class="kpi-value" style="color:var(--accent-green)">0</span>
+      </div>
+
+      <!-- Scrap Parts -->
+      <div class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Scrap Parts</span>
+        <span id="scrapParts" class="kpi-value" style="color:var(--accent-red)">0</span>
+      </div>
+
+      <!-- Yield -->
+      <div class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Yield</span>
+        <span id="yield" class="kpi-value" style="color:var(--accent-cyan)">—</span>
+      </div>
+
+      <!-- Last Measurement -->
+      <div id="kpiLast" class="card px-4 py-3 flex flex-col gap-1">
+        <span class="kpi-label">Last ∅ (mm)</span>
+        <span id="lastMeas" class="kpi-value">—</span>
+      </div>
+    </section>
+
+    <!-- Row 2 — Chart -->
+    <section class="card p-4 flex flex-col gap-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold tracking-wide" style="color:var(--text-muted)">LIVE DIAMETER TREND — LAST 30 PARTS</h2>
+        <div class="flex items-center gap-4 text-xs" style="color:var(--text-muted)">
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 rounded" style="background:var(--accent-cyan)"></span>Measured</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 rounded" style="background:var(--accent-green)"></span>Nominal</span>
+          <span class="flex items-center gap-1"><span class="inline-block w-3 h-0.5 rounded" style="background:var(--accent-red)"></span>USL / LSL</span>
+        </div>
+      </div>
+      <div id="chartWrap">
+        <canvas id="spcChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Row 3 — Controls -->
+    <section class="card px-5 py-4 flex flex-wrap items-center gap-4">
+      <button id="btnToggle" class="btn btn-green" onclick="toggleMachine()">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.841z"/></svg>
+        <span id="btnToggleLabel">Pause</span>
+      </button>
+
+      <button id="btnWear" class="btn btn-amber" onclick="toggleWear()">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>
+        <span id="btnWearLabel">Tool Wear: OFF</span>
+      </button>
+
+      <button class="btn btn-blue" onclick="resetSim()">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"/></svg>
+        Reset
+      </button>
+
+      <div class="ml-auto text-xs" style="color:var(--text-muted)">
+        Nominal <strong class="text-white">50.000 mm</strong> &nbsp;|&nbsp;
+        USL <strong style="color:var(--accent-red)">50.050 mm</strong> &nbsp;|&nbsp;
+        LSL <strong style="color:var(--accent-red)">49.950 mm</strong>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════ FOOTER ═══════════════════ -->
+  <footer class="text-center text-xs py-3" style="color:var(--text-muted);border-top:1px solid var(--border)">
+    CNC Turning Center — Steel Shaft ∅ 50 mm — Statistical Process Control
+  </footer>
+
+  <!-- ═══════════════════ APPLICATION LOGIC ═══════════════════ -->
+  <script>
+  (() => {
+    "use strict";
+
+    /* ── Constants ── */
+    const NOMINAL  = 50.000;
+    const USL      = 50.050;
+    const LSL      = 49.950;
+    const INTERVAL = 1500;          // ms between parts
+    const MAX_PTS  = 30;            // visible window
+    const BASE_STD = 0.015;         // base standard-deviation (mm)
+
+    /* ── State ── */
+    let running      = true;
+    let toolWear     = false;
+    let totalParts   = 0;
+    let goodParts    = 0;
+    let scrapParts   = 0;
+    let partsSinceWear = 0;         // counts parts since Tool Wear was enabled
+    let timerID      = null;
+
+    /* ── DOM refs ── */
+    const elTotal    = document.getElementById("totalParts");
+    const elGood     = document.getElementById("goodParts");
+    const elScrap    = document.getElementById("scrapParts");
+    const elYield    = document.getElementById("yield");
+    const elLast     = document.getElementById("lastMeas");
+    const elState    = document.getElementById("stateText");
+    const elDot      = document.getElementById("stateDot");
+    const elBtnLbl   = document.getElementById("btnToggleLabel");
+    const elBtnTog   = document.getElementById("btnToggle");
+    const elWearLbl  = document.getElementById("btnWearLabel");
+    const elKpiLast  = document.getElementById("kpiLast");
+
+    /* ── Gaussian random (Box-Muller) ── */
+    function randGauss(mean, std) {
+      let u, v, s;
+      do { u = Math.random() * 2 - 1; v = Math.random() * 2 - 1; s = u * u + v * v; } while (s >= 1 || s === 0);
+      return mean + std * u * Math.sqrt(-2 * Math.log(s) / s);
+    }
+
+    /* ── Generate one measurement ── */
+    function generateMeasurement() {
+      let mean = NOMINAL;
+      let std  = BASE_STD;
+
+      if (toolWear) {
+        // Gradual drift: mean shifts ~0.002 mm per part towards USL, capped near USL
+        const drift = Math.min(partsSinceWear * 0.002, USL - NOMINAL + 0.01);
+        mean += drift;
+        // Slightly increase variance as tool degrades
+        std += partsSinceWear * 0.0003;
+      }
+
+      return parseFloat(randGauss(mean, std).toFixed(4));
+    }
+
+    /* ── Chart.js setup ── */
+    const ctx = document.getElementById("spcChart").getContext("2d");
+
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          // Measured values
+          {
+            label: "Measured ∅",
+            data: [],
+            borderColor: "#06b6d4",
+            backgroundColor: "rgba(6,182,212,.15)",
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            pointBackgroundColor: [],    // dynamic per-point colour
+            pointBorderColor: "#06b6d4",
+            tension: 0.25,
+            fill: false,
+          },
+          // Nominal
+          {
+            label: "Nominal (50.000)",
+            data: [],
+            borderColor: "#22c55e",
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+          // USL
+          {
+            label: "USL (50.050)",
+            data: [],
+            borderColor: "#ef4444",
+            borderWidth: 1.5,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+          // LSL
+          {
+            label: "LSL (49.950)",
+            data: [],
+            borderColor: "#ef4444",
+            borderWidth: 1.5,
+            borderDash: [4, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 350, easing: "easeOutQuart" },
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "#1a1d27",
+            titleColor: "#e4e6ed",
+            bodyColor: "#e4e6ed",
+            borderColor: "#2e3345",
+            borderWidth: 1,
+            padding: 10,
+            callbacks: {
+              label: (ctx) => {
+                if (ctx.datasetIndex === 0) return ` ∅ ${ctx.parsed.y.toFixed(4)} mm`;
+                return ` ${ctx.dataset.label}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: { color: "#8b8fa3", font: { size: 11 } },
+            grid:  { color: "rgba(46,51,69,.5)" },
+          },
+          y: {
+            min: 49.900,
+            max: 50.100,
+            ticks: {
+              color: "#8b8fa3",
+              font: { size: 11 },
+              callback: (v) => v.toFixed(3),
+            },
+            grid: { color: "rgba(46,51,69,.4)" },
+          },
+        },
+      },
+    });
+
+    /* ── Push one data-point to chart ── */
+    function pushPoint(partNum, value) {
+      const ds     = chart.data.datasets;
+      const labels = chart.data.labels;
+
+      labels.push(`#${partNum}`);
+      ds[0].data.push(value);
+      ds[1].data.push(NOMINAL);
+      ds[2].data.push(USL);
+      ds[3].data.push(LSL);
+
+      // Colour point red if out-of-tolerance
+      const inTol = value >= LSL && value <= USL;
+      ds[0].pointBackgroundColor.push(inTol ? "#06b6d4" : "#ef4444");
+
+      // Trim to MAX_PTS
+      if (labels.length > MAX_PTS) {
+        labels.shift();
+        ds.forEach((d) => d.data.shift());
+        ds[0].pointBackgroundColor.shift();
+      }
+
+      chart.update();
+    }
+
+    /* ── Update KPI elements ── */
+    function updateKPIs(value) {
+      totalParts++;
+      const inTol = value >= LSL && value <= USL;
+      if (inTol) goodParts++; else scrapParts++;
+
+      elTotal.textContent = totalParts;
+      elGood.textContent  = goodParts;
+      elScrap.textContent = scrapParts;
+      elYield.textContent = (goodParts / totalParts * 100).toFixed(1) + " %";
+
+      // Last measurement with colour
+      elLast.textContent = value.toFixed(4);
+      elLast.style.color = inTol ? "var(--accent-cyan)" : "var(--accent-red)";
+
+      // Flash the KPI card
+      elKpiLast.classList.remove("flash-good", "flash-bad");
+      void elKpiLast.offsetWidth; // trigger reflow
+      elKpiLast.classList.add(inTol ? "flash-good" : "flash-bad");
+    }
+
+    /* ── Tick — one production cycle ── */
+    function tick() {
+      if (toolWear) partsSinceWear++;
+      const value = generateMeasurement();
+      updateKPIs(value);
+      pushPoint(totalParts, value);
+    }
+
+    /* ── Start / Stop timer ── */
+    function startTimer() { timerID = setInterval(tick, INTERVAL); }
+    function stopTimer()  { clearInterval(timerID); timerID = null; }
+
+    /* ── Public: Toggle Machine ── */
+    window.toggleMachine = function () {
+      running = !running;
+      if (running) {
+        startTimer();
+        elState.textContent = "Running";
+        elState.className   = "kpi-value text-green-400 text-lg";
+        elDot.style.background = "var(--accent-green)";
+        elDot.classList.add("pulse-dot");
+        elBtnLbl.textContent = "Pause";
+        elBtnTog.classList.remove("btn-green");
+        elBtnTog.classList.add("btn-green");
+        // swap icon to pause
+        elBtnTog.querySelector("svg").innerHTML =
+          '<path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.841z"/>';
+      } else {
+        stopTimer();
+        elState.textContent = "Stopped";
+        elState.className   = "kpi-value text-red-400 text-lg";
+        elDot.style.background = "var(--accent-red)";
+        elDot.classList.remove("pulse-dot");
+        elBtnLbl.textContent = "Resume";
+        elBtnTog.classList.remove("btn-green");
+        elBtnTog.classList.add("btn-red");
+        // swap icon to play
+        elBtnTog.querySelector("svg").innerHTML =
+          '<path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.841z"/>';
+      }
+    };
+
+    /* ── Public: Toggle Tool Wear ── */
+    window.toggleWear = function () {
+      toolWear = !toolWear;
+      if (toolWear) {
+        partsSinceWear = 0;
+        elWearLbl.textContent = "Tool Wear: ON";
+        document.getElementById("btnWear").classList.remove("btn-amber");
+        document.getElementById("btnWear").classList.add("btn-red");
+      } else {
+        partsSinceWear = 0;
+        elWearLbl.textContent = "Tool Wear: OFF";
+        document.getElementById("btnWear").classList.remove("btn-red");
+        document.getElementById("btnWear").classList.add("btn-amber");
+      }
+    };
+
+    /* ── Public: Reset ── */
+    window.resetSim = function () {
+      stopTimer();
+      totalParts = 0; goodParts = 0; scrapParts = 0; partsSinceWear = 0;
+      toolWear = false;
+
+      elTotal.textContent = "0";
+      elGood.textContent  = "0";
+      elScrap.textContent = "0";
+      elYield.textContent = "—";
+      elLast.textContent  = "—";
+      elLast.style.color  = "var(--text-primary)";
+
+      // Reset chart
+      chart.data.labels = [];
+      chart.data.datasets.forEach((d) => { d.data = []; });
+      chart.data.datasets[0].pointBackgroundColor = [];
+      chart.update();
+
+      // Reset wear button
+      elWearLbl.textContent = "Tool Wear: OFF";
+      document.getElementById("btnWear").classList.remove("btn-red");
+      document.getElementById("btnWear").classList.add("btn-amber");
+
+      // Restart
+      running = true;
+      elState.textContent = "Running";
+      elState.className   = "kpi-value text-green-400 text-lg";
+      elDot.style.background = "var(--accent-green)";
+      elDot.classList.add("pulse-dot");
+      elBtnLbl.textContent = "Pause";
+      elBtnTog.classList.remove("btn-red");
+      elBtnTog.classList.add("btn-green");
+      startTimer();
+    };
+
+    /* ── Boot ── */
+    startTimer();
+  })();
+  </script>
+
+</body>
+</html>
