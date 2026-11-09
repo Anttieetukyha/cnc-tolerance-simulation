@@ -1,3 +1,4 @@
+### 👉 [Live Demo (Click here to open simulation in browser)](https://anttieetukyha.github.io/cnc-tolerance-simulation/
 
 # CNC Tolerance Monitor — Real-Time SPC Dashboard
 
