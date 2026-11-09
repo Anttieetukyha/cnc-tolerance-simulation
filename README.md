@@ -1,4 +1,4 @@
-[Uploading README.md…]()
+
 # CNC Tolerance Monitor — Real-Time SPC Dashboard
 
 A lightweight, zero-dependency web application that simulates a **CNC Turning Center** producing steel shafts and monitors part diameter tolerances in real time using **Statistical Process Control (SPC)** principles.
